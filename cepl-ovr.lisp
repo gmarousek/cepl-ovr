@@ -1,10 +1,68 @@
 ;;;; cepl-ovr.lisp
 (in-package #:cepl-ovr)
 
+(defparameter *color* (vector 0 0 0 1))
+(defparameter *normal* (vector 1 0 0))
+(defparameter *buf* (make-array '(1024) :element-type 'single-float
+                         :fill-pointer 0 :adjustable t))
+(defparameter *count 0)
+
+(defun color (r g b &optional (a 1))
+  (setf *color* (vector r g b a)))
+(defun normal (x y z)
+  (setf *normal* (vector x y z)))
+(defun vertex (x y z &optional (w 1))
+  (loop for i in (list x y z w)
+     do (vector-push-extend (float i 0.0) *buf*))
+  (loop for i across *color*
+     do (vector-push-extend (float i 0.0) *buf*))
+  (loop for i across *normal*
+     do (vector-push-extend (float i 0.0) *buf*))
+  (incf *count))
+
+
+(defun cub (x y z r) ;;xyz position, r size(?) 
+              (let* ((x (coerce x 'single-float))
+                     (y (coerce y 'single-float))
+                     (z (coerce z 'single-float))
+                     (r (coerce r 'single-float))
+                     (a (sb-cga:vec (- r) (- r) (- r)))
+                     (b (sb-cga:vec (- r) (+ r) (- r)))
+                     (c (sb-cga:vec (+ r) (+ r) (- r)))
+                     (d (sb-cga:vec (+ r) (- r) (- r)))
+                     (fpi (coerce pi 'single-float)))
+                (loop for m in (list (sb-cga:rotate* 0.0 0.0 0.0)
+                                     (sb-cga:rotate* 0.0 (* fpi 1/2) 0.0)
+                                     (sb-cga:rotate* 0.0 (* fpi 2/2) 0.0)
+                                     (sb-cga:rotate* 0.0 (* fpi 3/2) 0.0)
+                                     (sb-cga:rotate* (* fpi 1/2) 0.0 0.0)
+                                     (sb-cga:rotate* (* fpi 3/2) 0.0 0.0))
+                      do (let ((n (sb-cga:transform-point
+                                   (sb-cga:vec 0.0 0.0 1.0) m)))
+                           (normal (aref n 0) (aref n 1) (aref n 2)))
+                         (flet ((v (v)
+                                  (let ((v (sb-cga:transform-point v m)))
+                                    (vertex (+ x (aref v 0))
+                                            (+ y (aref v 1))
+                                            (+ z (aref v 2))))))
+                           (format t "~s~%" (v a))
+			   (format t "~s~%" (v b))
+			   (format t "~s~%" (v c))
+			   (format t "~s~%" (v a))
+			   (format t "~s~%" (v c))
+			   (format t "~s~%~%" (v d))
+                           (v b)
+                           (v c)
+                           (v a)
+                           (v c)
+                           (v d)))))
+
 ;;;; ****************************START OF CEPL CODE******************************
+
 (defparameter *array* nil)
 (defparameter *stream* nil)
 (defparameter *running* nil)
+(defparameter *entities* nil)
 
 (defstruct-g pos-col
   (position :vec3 :accessor pos)
@@ -22,32 +80,84 @@
 
 (defun triangle (p1x p1y p1z p2x p2y p2z p3x p3y p3z)
   (list (list (v! p1x p1y p1z) (v! 0 1 0 1))
-	(list (v! p2x p2y p2z) (v! 0 0 1 1))
-	(list (v! p3x p3y p3z) (v! 1 0 0 1))))
+  	(list (v! p2x p2y p2z) (v! 0 0 1 1))
+  	(list (v! p3x p3y p3z) (v! 1 0 0 1))))
 
-(defparameter *data* (triangle 1 0 0 0 1 0 -1 0 0))
+(defun plane (p1x p1y p1z p2x p2y p2z p3x p3y p3z p4x p4y p4z)
+  (append (triangle p1x p1y p1z p2x p2y p2z p3x p3y p3z)
+	  (triangle p3x p3y p3z p2x p2y p2z p4x p4y p4z)))
+
+(defun box (x-size y-size z-size)
+  (append (plane
+	   (- (/ x-size 2)) (/ y-size 2) (/ z-size 2)
+	   (- (/ x-size 2)) (- (/ y-size 2)) (/ z-size 2)
+	   (/ x-size 2) (/ y-size 2) (/ z-size 2)
+	   (/ x-size 2) (- (/ y-size 2)) (/ z-size 2))
+	  (plane
+	   (/ x-size 2) (/ y-size 2) (/ z-size 2)
+	   (/ x-size 2) (-(/ y-size 2)) (/ z-size 2)
+	   (/ x-size 2) (/ y-size 2) (- (/ z-size 2))
+	   (/ x-size 2) (- (/ y-size 2)) (- (/ z-size 2)))
+	  (plane
+	   (/ x-size 2) (/ y-size 2) (- (/ z-size 2))
+	   (/ x-size 2) (- (/ y-size 2)) (- (/ z-size 2))
+	   (- (/ x-size 2)) (/ y-size 2) (- (/ z-size 2))
+	   (- (/ x-size 2)) (- (/ y-size 2)) (- (/ z-size 2)))
+	  (plane
+	   (- (/ x-size 2)) (/ y-size 2) (- (/ z-size 2))
+	   (- (/ x-size 2)) (- (/ y-size 2)) (- (/ z-size 2))
+	   (- (/ x-size 2)) (/ y-size 2) (/ z-size 2)
+	   (- (/ x-size 2)) (- (/ y-size 2)) (/ z-size 2))
+	  (plane
+	   (/ x-size 2) (/ y-size 2) (/ z-size 2)
+	   (/ x-size 2) (/ y-size 2) (- (/ z-size 2))
+	   (- (/ x-size 2)) (/ y-size 2) (/ z-size 2)
+	   (- (/ x-size 2)) (/ y-size 2) (- (/ z-size 2)))
+	  (plane
+	   (- (/ x-size 2)) (- (/ y-size 2)) (/ z-size 2)
+	   (- (/ x-size 2)) (- (/ y-size 2)) (- (/ z-size 2))
+	   (/ x-size 2) (- (/ y-size 2)) (/ z-size 2)
+	   (/ x-size 2) (- (/ y-size 2)) (- (/ z-size 2)))))
+
+(defclass entity ()
+  ((e-stream :initform nil :initarg :e-stream :accessor e-stream)
+   (position :initform (v! 0 0 -20) :initarg :pos :accessor pos)
+   (rotation :initform (v! 0 0 0) :initarg :rot :accessor rot)
+   (scale :initform (v! 1 1 1) :initarg :scale :accessor scale)))
+
+(defun make-entity (&key pos e-stream)
+  (make-instance 'entity :pos pos :e-stream e-stream))
+
+(defun update-entity (entity)
+  (let ((m2w (reduce #'m4:* (list (m4:translation (pos entity))
+				  (m4:rotation-from-euler (rot entity))
+				  (m4:scale (scale entity))))))
+    (setf (rot entity) (v:+ (rot entity) (v! 0.01 0.015 0.02)))
+    (map-g #'prog-1 (e-stream entity))))
+
+(defparameter *data* (box 1 1 1))
+
+(defun init ()
+  (let* ((verts (make-gpu-array *data*
+				:element-type 'pos-col))
+	 (e-stream (make-buffer-stream verts)))
+    (setf *entities*
+	  (mapcar (lambda (_) (make-entity :pos _ :e-stream e-stream))
+		  (list (v! 0 0 -15))))))
+
+(defun retnil ()
+  nil)
 
 (defun step-demo ()
-  (step-host)
-  (update-repl-link)
-  (clear)
-  (if (not *array*)
-      (setf *array* (make-gpu-array *data* :element-type 'pos-col))
-      (progn (free *array*)
-	     (free *stream*)
-	     (setf *array* (make-gpu-array *data* :element-type 'pos-col)
-		   *stream* (make-buffer-stream *array*))))
-  (map-g #'prog-1 *stream*)
+  ;; (step-host)
+  ;; (update-repl-link)
+  ;; (clear)				
+  (map nil #'update-entity *entities*)	
   (swap))
-
+					   
 (defun run-loop ()
+  (init)
   (setf *running* t
-        ;; *array* (make-gpu-array (list (list (v!  0.5 -0.36 0) (v! 0 1 0 1))
-        ;;                               (list (v!    0   0.5 0) (v! 1 0 0 1))
-        ;;                               (list (v! -0.5 -0.36 0) (v! 0 0 1 1)))
-        ;;                         :element-type 'pos-col)
-	;; *array* (make-gpu-array (triangle -.5 .5 0 -.5 -.5 0 .5 .5 0)
-	;; 			:element-type 'pos-col)
 	*array* (make-gpu-array *data*
 				:element-type 'pos-col)
         *stream* (make-buffer-stream *array*))
@@ -153,20 +263,21 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
         (normal (vector 1 0 0))
         (buf (make-array '(1024) :element-type 'single-float
                          :fill-pointer 0 :adjustable t))
+	(shapebuf (make-gpu-array *data* :element-type 'pos-col))
         (count 0))
    (labels ((color (r g b &optional (a 1))
               (setf color (vector r g b a)))
             (normal (x y z)
               (setf normal (vector x y z)))
             (vertex (x y z &optional (w 1))
-              (loop for i in (list x y z w)
+              (loop for i in (list x y z) ;;+w
                     do (vector-push-extend (float i 0.0) buf))
               (loop for i across color
                     do (vector-push-extend (float i 0.0) buf))
-              (loop for i across normal
-                    do (vector-push-extend (float i 0.0) buf))
+              ;; (loop for i across normal
+              ;;       do (vector-push-extend (float i 0.0) buf))
               (incf count))
-            (cube (x y z r)
+            (cube (x y z r) ;;xyz position, r size(?) 
               (let* ((x (coerce x 'single-float))
                      (y (coerce y 'single-float))
                      (z (coerce z 'single-float))
@@ -209,13 +320,14 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                        (vertex i -0.66 j)
                        (vertex (1+ i) -0.66 (1+ j))
                        (vertex i -0.66 (1+ j))))
-     ;; and some random cubes
+     ;; and some random cubes		
      ;; (let ((*random-state* (make-random-state *random-state*))
      ;;       (r 20.0))
      ;;   (flet ((r () (- (random r) (/ r 2))))
      ;;     (loop for i below 5000
      ;;           do (color (random 1.0) (+ 0.5 (random 0.5)) (random 1.0) 1.0)
-     ;;              (cube (+ 0.0 (r)) (- (r)) (+ 1.5 (r)) (+ 0.05 (random 0.10))))))
+     ;; 	    (cube (+ 0.0 (r)) (- (r)) (+ 1.5 (r)) (+ 0.05 (random 0.10))))))
+     
      (let ((stride (* 11 4)))
        (gl:bind-buffer :array-buffer vbo)
        (%gl:buffer-data :array-buffer (* count stride) (cffi:null-pointer)
@@ -249,8 +361,9 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
   (gl:light :light0 :position '(100.0 -120.0 -10.0 0.0))
   (when (world-count win)
     (gl:disable :texture-2d)
-    (gl:bind-vertex-array (world-vao win))
-    (%gl:draw-arrays :triangles 0 (world-count win)))
+    ;; (gl:bind-vertex-array (world-vao win))
+    ;; (%gl:draw-arrays :triangles 0 (world-count win)))
+    (make-buffer-stream (make-gpu-array *data* :element-type 'pos-col))
   (gl:point-size 10)
   (gl:with-pushed-matrix* (:modelview)
     ;(gl:load-identity)
@@ -260,7 +373,7 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
       (gl:bind-texture :texture-2d (hud-texture win))
       (gl:bind-vertex-array (hud-vao win))
       (%gl:draw-arrays :triangles 0 (hud-count win))))
-    (gl:bind-vertex-array 0))
+    (gl:bind-vertex-array 0)))
 
 
 
@@ -411,7 +524,7 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
              ;; create window
              (format t "opening ~sx~s window at ~s,~s~%" w h x y)
              (glop:with-window (win
-                                "3bovr test window"
+                                "cepl-ovr test window"
                                 w h
                                 :x x :y y
                                 :win-class '3bovr-test
@@ -545,7 +658,11 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                          do (draw-frame hmd :eye-render-desc eye-render-desc
                                             :fbo fbo
                                             :eye-textures eye-textures
-                                            :win win))
+                                            :win win)
+		        (init)
+			(setf *running* t)
+			(loop :while (and *running* (not (shutting-down-p))) :do
+			   (continuable (step-demo))))
                    ;; clean up
                    (gl:delete-vertex-arrays vaos)
                    (gl:delete-framebuffers (list fbo))
@@ -555,10 +672,9 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                    (sleep 1))))))
          (progn
            (format t "done2~%")
+	   (stop-loop)
            (setf *once* nil)
            (format t "done3 ~s~%" *once*)))))
-
-
 
 #++
 (asdf:load-systems '3b-ovr-sample)
