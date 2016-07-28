@@ -1,1 +1,1 @@
-This is the stub README.txt for the "cepl-ovr" project.
+An attempt to use CEPL with 3b's ovr test file.
