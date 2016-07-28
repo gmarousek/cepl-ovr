@@ -2,5 +2,4 @@
 
 (defpackage cepl-ovr
   (:use #:cl #:cepl #:temporal-functions
-	#:varjo-lang #:rtg-math
-	))
+	#:varjo-lang #:rtg-math))

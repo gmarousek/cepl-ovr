@@ -4,9 +4,9 @@
   :description "Describe cepl-ovr here"
   :author "Your Name <your.name@example.com>"
   :license "Specify license here"
-  :depends-on (#:cepl
+  :depends-on (#:cepl.glop
+	       #:3b-ovr-sample
                #:temporal-functions
-               #:glop
                #:swank
                #:livesupport
                #:skitter

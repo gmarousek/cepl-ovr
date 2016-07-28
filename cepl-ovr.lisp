@@ -1,62 +1,5 @@
 ;;;; cepl-ovr.lisp
 (in-package #:cepl-ovr)
-
-(defparameter *color* (vector 0 0 0 1))
-(defparameter *normal* (vector 1 0 0))
-(defparameter *buf* (make-array '(1024) :element-type 'single-float
-                         :fill-pointer 0 :adjustable t))
-(defparameter *count 0)
-
-(defun color (r g b &optional (a 1))
-  (setf *color* (vector r g b a)))
-(defun normal (x y z)
-  (setf *normal* (vector x y z)))
-(defun vertex (x y z &optional (w 1))
-  (loop for i in (list x y z w)
-     do (vector-push-extend (float i 0.0) *buf*))
-  (loop for i across *color*
-     do (vector-push-extend (float i 0.0) *buf*))
-  (loop for i across *normal*
-     do (vector-push-extend (float i 0.0) *buf*))
-  (incf *count))
-
-
-(defun cub (x y z r) ;;xyz position, r size(?) 
-              (let* ((x (coerce x 'single-float))
-                     (y (coerce y 'single-float))
-                     (z (coerce z 'single-float))
-                     (r (coerce r 'single-float))
-                     (a (sb-cga:vec (- r) (- r) (- r)))
-                     (b (sb-cga:vec (- r) (+ r) (- r)))
-                     (c (sb-cga:vec (+ r) (+ r) (- r)))
-                     (d (sb-cga:vec (+ r) (- r) (- r)))
-                     (fpi (coerce pi 'single-float)))
-                (loop for m in (list (sb-cga:rotate* 0.0 0.0 0.0)
-                                     (sb-cga:rotate* 0.0 (* fpi 1/2) 0.0)
-                                     (sb-cga:rotate* 0.0 (* fpi 2/2) 0.0)
-                                     (sb-cga:rotate* 0.0 (* fpi 3/2) 0.0)
-                                     (sb-cga:rotate* (* fpi 1/2) 0.0 0.0)
-                                     (sb-cga:rotate* (* fpi 3/2) 0.0 0.0))
-                      do (let ((n (sb-cga:transform-point
-                                   (sb-cga:vec 0.0 0.0 1.0) m)))
-                           (normal (aref n 0) (aref n 1) (aref n 2)))
-                         (flet ((v (v)
-                                  (let ((v (sb-cga:transform-point v m)))
-                                    (vertex (+ x (aref v 0))
-                                            (+ y (aref v 1))
-                                            (+ z (aref v 2))))))
-                           (format t "~s~%" (v a))
-			   (format t "~s~%" (v b))
-			   (format t "~s~%" (v c))
-			   (format t "~s~%" (v a))
-			   (format t "~s~%" (v c))
-			   (format t "~s~%~%" (v d))
-                           (v b)
-                           (v c)
-                           (v a)
-                           (v c)
-                           (v d)))))
-
 ;;;; ****************************START OF CEPL CODE******************************
 
 (defparameter *array* nil)
@@ -143,10 +86,7 @@
 	 (e-stream (make-buffer-stream verts)))
     (setf *entities*
 	  (mapcar (lambda (_) (make-entity :pos _ :e-stream e-stream))
-		  (list (v! 0 0 -15))))))
-
-(defun retnil ()
-  nil)
+		  (list (v! 0 0 0))))))
 
 (defun step-demo ()
   ;; (step-host)
@@ -169,8 +109,9 @@
 
 ;;;; ******************************END OF CEPL CODE********************************
 
-(defclass 3bovr-test (glop:window)
-  ((hmd :reader hmd :initarg :hmd)
+(defclass 3bovr-test ()
+  ((window :accessor win :initarg window)
+   (hmd :reader hmd :initarg :hmd)
    (world-vao :accessor world-vao)
    (count :accessor world-count)
    (hud-vbo :accessor hud-vbo :initform nil)
@@ -181,15 +122,17 @@
 
 (defparameter *tex-size* 256)
 
-(defmethod glop:on-event ((window 3bovr-test) (event glop:key-event))
-  ;; exit on ESC key
-  (when (glop:pressed event)
-    (case (glop:keysym event)
-      (:escape
-       (glop:push-close-event window))
-      (:space
-       (format t "latency = ~{~,3,3f ~,3,3f ~,3,3f ~,3,3f ~,3,3f~}~%"
-               (%ovr::get-float-array (hmd window) :dk2-latency 5))))))
+;; (defmethod glop:on-event ((window 3bovr-test) (event glop:key-event))
+;;   ;; exit on ESC key
+;;   (when (glop:pressed event)
+;;     (case (glop:keysym event)
+;;       (:escape
+;;        (cepl::quit)
+;;        (glop:push-close-event window)
+;;        (cepl.host::shutdown))
+;;       (:space
+;;        (format t "latency = ~{~,3,3f ~,3,3f ~,3,3f ~,3,3f ~,3,3f~}~%"
+;;                (%ovr::get-float-array (hmd window) :dk2-latency 5))))))
 
 (defun hud-text (win hmd)
   (declare (ignorable win))
@@ -200,9 +143,9 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
           (%ovr::get-float-array
            hmd :dk2-latency 5)))
 
-(defmethod glop:on-event ((window 3bovr-test) event)
-  ;; ignore any other events
-  (declare (ignore window event)))
+;; (defmethod glop:on-event ((window 3bovr-test) event)
+;;   ;; ignore any other events
+;;   (declare (ignore window event)))
 
 (defun init-hud (win)
   (let ((vbo (gl:gen-buffer))
@@ -327,26 +270,25 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
      ;;     (loop for i below 5000
      ;;           do (color (random 1.0) (+ 0.5 (random 0.5)) (random 1.0) 1.0)
      ;; 	    (cube (+ 0.0 (r)) (- (r)) (+ 1.5 (r)) (+ 0.05 (random 0.10))))))
-     
-     (let ((stride (* 11 4)))
-       (gl:bind-buffer :array-buffer vbo)
-       (%gl:buffer-data :array-buffer (* count stride) (cffi:null-pointer)
-                        :static-draw)
-       (gl:bind-vertex-array vao)
-       (gl:enable-client-state :vertex-array)
-       (%gl:vertex-pointer 4 :float stride (cffi:null-pointer))
-       (gl:enable-client-state :normal-array)
-       (%gl:normal-pointer :float stride (* 8 4))
-       (gl:enable-client-state :color-array)
-       (%gl:color-pointer 4 :float stride (* 4 4)))
-     (let ((p (%gl:map-buffer :array-buffer :write-only)))
-       (unwind-protect
-            (loop for i below (fill-pointer buf)
-                  do (setf (cffi:mem-aref p :float i)
-                           (aref buf i)))
-         (%gl:unmap-buffer :array-buffer)))
-     (gl:bind-vertex-array 0)
-     (gl:delete-buffers (list vbo))
+     ;; (let ((stride (* 11 4)))
+     ;;   (gl:bind-buffer :array-buffer vbo)
+     ;;   (%gl:buffer-data :array-buffer (* count stride) (cffi:null-pointer)
+     ;;                    :static-draw)
+     ;;   (gl:bind-vertex-array vao)
+     ;;   (gl:enable-client-state :vertex-array) ;;
+     ;;   (%gl:vertex-pointer 4 :float stride (cffi:null-pointer))
+     ;;   (gl:enable-client-state :normal-array)
+     ;;   (%gl:normal-pointer :float stride (* 8 4))
+     ;;   (gl:enable-client-state :color-array)
+     ;;   (%gl:color-pointer 4 :float stride (* 4 4)))
+     ;; (let ((p (%gl:map-buffer :array-buffer :write-only)))
+     ;;   (unwind-protect
+     ;;        (loop for i below (fill-pointer buf)
+     ;;              do (setf (cffi:mem-aref p :float i)
+     ;;                       (aref buf i)))
+     ;;     (%gl:unmap-buffer :array-buffer)))
+     ;; (gl:bind-vertex-array 0)
+     ;; (gl:delete-buffers (list vbo))
      count)))
 
 (defparameter *w* nil)
@@ -419,7 +361,7 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
           (t
            (gl:clear-color 0.5 0.1 0.1 1))))
       ;; draw view from each eye
-      (gl:bind-framebuffer :framebuffer fbo)
+      ;; (gl:bind-framebuffer :framebuffer fbo) 
       (loop
         for index below 2
         ;; sdk specifies preferred drawing order, so it can predict
@@ -448,29 +390,34 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                                   (getf size :w)
                                   (getf size :h)))))
              (viewport (getf (elt eye-textures index) :render-viewport)))
-           (gl:enable :scissor-test)
+          ;; (gl:enable :scissor-test)
            ;; configure matrices
-           (gl:with-pushed-matrix* (:projection)
-             (gl:load-transpose-matrix projection)
-             (gl:with-pushed-matrix* (:modelview)
-               (gl:load-identity)
-               (gl:mult-transpose-matrix
-                (kit.math::quat-rotate-matrix
-                 ;; kit.math quaternions are w,x,y,z but libovr quats
-                 ;; are x,y,z,w
-                 (kit.math::quaternion (aref orientation 3)
-                                       (aref orientation 0)
-                                       (aref orientation 1)
-                                       (aref orientation 2) )))
-               (gl:translate (- (aref position 0))
-                             (- (aref position 1))
-                             (- (aref position 2)))
-               (draw-world win))))
-      (gl:bind-framebuffer :framebuffer 0)
+          ;;  (gl:with-pushed-matrix* (:projection)
+      ;;        (gl:load-transpose-matrix projection)
+      ;;        (gl:with-pushed-matrix* (:modelview)
+      ;;          (gl:load-identity)
+      ;;          (gl:mult-transpose-matrix
+      ;;           (kit.math::quat-rotate-matrix
+      ;;            ;; kit.math quaternions are w,x,y,z but libovr quats
+      ;;            ;; are x,y,z,w
+      ;;            (kit.math::quaternion (aref orientation 3)
+      ;;                                  (aref orientation 0)
+      ;;                                  (aref orientation 1)
+      ;;                                  (aref orientation 2) )))
+      ;;          (gl:translate (- (aref position 0))
+      ;;                        (- (aref position 1))
+      ;;                        (- (aref position 2)))
+      ;;          (draw-world win))))
+      ;; (gl:bind-framebuffer :framebuffer 0)
       ;; pass textures to SDK for distortion, display and vsync
-      (%ovr::end-frame hmd head-pose eye-textures))))
+      (%ovr::end-frame hmd head-pose eye-textures)))))
 
 (defparameter *once* nil)
+
+(defun reset ()
+  (setf *once* nil)
+  (cepl::quit)
+  (stop-loop))
 
 (defun test-3bovr ()
   (when *once*
@@ -523,14 +470,20 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                (setf w 1920 h 1080))
              ;; create window
              (format t "opening ~sx~s window at ~s,~s~%" w h x y)
-             (glop:with-window (win
-                                "cepl-ovr test window"
-                                w h
-                                :x x :y y
-                                :win-class '3bovr-test
-                                :fullscreen nil
-                                :depth-size 16)
-               (setf (slot-value win 'hmd) hmd)
+	     (cepl::init w h "cepl-ovr" t)
+;;*****************************************************************************************************
+	     (let ((win (make-instance '3bovr-test)))
+	       (setf (slot-value win 'window) cepl.glop::*window*
+		     (slot-value win 'hmd) hmd)
+	     ;;   (setf (slot-value win 'win-class) '3bovr-test)
+             ;; (glop:with-window (win
+             ;;                    "cepl-ovr test window"
+             ;;                    w h
+             ;;                    :x x :y y
+             ;;                    :win-class '3bovr-test
+             ;;                    :fullscreen nil
+	       ;;                    :depth-size 16)
+	       ;;(inspect hmd) make my own 3bovr-test object with a window component
                ;; configure rendering and save eye render params
                ;; todo: linux/mac versions
                (%ovr::with-configure-rendering eye-render-desc
@@ -600,76 +553,82 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                    ;; configure the fbo/texture
                    (format t "left eye tex size = ~s, right = ~s~% total =~sx~a~%"
                            ls rs fbo-w fbo-h)
-                   (gl:bind-texture :texture-2d (first textures))
-                   (gl:tex-parameter :texture-2d :texture-wrap-s :repeat)
-                   (gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
-                   (gl:tex-parameter :texture-2d :texture-min-filter :linear)
-                   (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-                   (gl:tex-image-2d :texture-2d 0 :srgb8-alpha8 fbo-w fbo-h
-                                    0 :rgba :unsigned-int (cffi:null-pointer))
-                   (gl:bind-framebuffer :framebuffer fbo)
-                   (gl:framebuffer-texture-2d :framebuffer :color-attachment0
-                                              :texture-2d (first textures) 0)
-                   (gl:bind-renderbuffer :renderbuffer renderbuffer)
-                   (gl:renderbuffer-storage :renderbuffer :depth-component24
-                                            fbo-w fbo-h)
-                   (gl:framebuffer-renderbuffer :framebuffer :depth-attachment
-                                                :renderbuffer renderbuffer)
-                   (format t "created renderbuffer status = ~s~%"
-                           (gl:check-framebuffer-status :framebuffer))
-                   (gl:bind-framebuffer :framebuffer 0)
+                   ;; (gl:bind-texture :texture-2d (first textures))
+                   ;; (gl:tex-parameter :texture-2d :texture-wrap-s :repeat)
+                   ;; (gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
+                   ;; (gl:tex-parameter :texture-2d :texture-min-filter :linear)
+                   ;; (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
+                   ;; (gl:tex-image-2d :texture-2d 0 :srgb8-alpha8 fbo-w fbo-h
+                   ;;                  0 :rgba :unsigned-int (cffi:null-pointer))
+                   ;; (gl:bind-framebuffer :framebuffer fbo)
+                   ;; (gl:framebuffer-texture-2d :framebuffer :color-attachment0
+                   ;;                            :texture-2d (first textures) 0)
+                   ;; (gl:bind-renderbuffer :renderbuffer renderbuffer)
+                   ;; (gl:renderbuffer-storage :renderbuffer :depth-component24
+                   ;;                          fbo-w fbo-h)
+                   ;; (gl:framebuffer-renderbuffer :framebuffer :depth-attachment
+                   ;;                              :renderbuffer renderbuffer)
+                   ;; (format t "created renderbuffer status = ~s~%"
+                   ;;         (gl:check-framebuffer-status :framebuffer))
+                   ;; (gl:bind-framebuffer :framebuffer 0)
 
                    ;; load font texture
-                   (gl:bind-texture :texture-2d (second textures))
-                   (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
-                   (gl:tex-parameter :texture-2d :texture-wrap-t :clamp-to-edge)
-                   (gl:tex-parameter :texture-2d :texture-min-filter :linear-mipmap-linear)
-                   (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-                   (let ((png (png-read:read-png-file
-                               (asdf:system-relative-pathname '3b-ovr
-                                                              "font.png"))))
-                     (gl:tex-image-2d :texture-2d 0 :rgb
-                                      (png-read:width png) (png-read:height png)
-                                      0 :rgb :unsigned-byte
-                                      (make-array (* 3
-                                                     (png-read:width png)
-                                                     (png-read:height png))
-                                                  :element-type
-                                                  '(unsigned-byte 8)
-                                                  :displaced-to
-                                                  (png-read:image-data png)))
-                     (gl:generate-mipmap :texture-2d)
-                     (gl:bind-texture :texture-2d 0))
-                   (setf (hud-texture win) (second textures))
+                   ;; (gl:bind-texture :texture-2d (second textures))
+                   ;; (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
+                   ;; (gl:tex-parameter :texture-2d :texture-wrap-t :clamp-to-edge)
+                   ;; (gl:tex-parameter :texture-2d :texture-min-filter :linear-mipmap-linear)
+                   ;; (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
+                   ;; (let ((png (png-read:read-png-file
+                   ;;             (asdf:system-relative-pathname '3b-ovr
+                   ;;                                            "font.png"))))
+                   ;;   (gl:tex-image-2d :texture-2d 0 :rgb
+                   ;;                    (png-read:width png) (png-read:height png)
+                   ;;                    0 :rgb :unsigned-byte
+                   ;;                    (make-array (* 3
+                   ;;                                   (png-read:width png)
+                   ;;                                   (png-read:height png))
+                   ;;                                :element-type
+                   ;;                                '(unsigned-byte 8)
+                   ;;                                :displaced-to
+                   ;;                                (png-read:image-data png)))
+                   ;;   (gl:generate-mipmap :texture-2d)
+                   ;;   (gl:bind-texture :texture-2d 0))
+                   ;; (setf (hud-texture win) (second textures))
 
                    ;; set up a vao containing a simple 'world' geometry,
                    ;; and hud geometry
-                   (setf (world-vao win) (first vaos)
-                         (world-count win) (build-world (first vaos))
-                         (hud-vao win) (second vaos))
-                   (init-hud win)
+		   
+                   ;; (setf (world-vao win) (first vaos)
+                   ;;       (world-count win) (build-world (first vaos))
+                   ;;       (hud-vao win) (second vaos))
+                   ;; (init-hud win)
+
+		   (glop:set-gl-window (slot-value win 'window))
 
                    ;; main loop
-                   (loop while (glop:dispatch-events win :blocking nil
-                                                         :on-foo nil)
+		   (init)
+                   (loop while (glop:dispatch-events (slot-value win 'window)
+						     :blocking nil
+						     :on-foo nil)
                          when font
                          ;; do (update-hud win (hud-text win hmd)
                          ;;                  font)
-                         do (draw-frame hmd :eye-render-desc eye-render-desc
+                         do (continuable (draw-frame hmd :eye-render-desc eye-render-desc
                                             :fbo fbo
                                             :eye-textures eye-textures
-                                            :win win)
-		        (init)
-			(setf *running* t)
-			(loop :while (and *running* (not (shutting-down-p))) :do
-			   (continuable (step-demo))))
+                                            :win win))
+			do (continuable (step-demo)))
+			;; (setf *running* t)
+			;; (loop :while (and *running* (not (shutting-down-p))) :do
+			;;    (continuable (step-demo))))
                    ;; clean up
-                   (gl:delete-vertex-arrays vaos)
-                   (gl:delete-framebuffers (list fbo))
-                   (gl:delete-textures textures)
-                   (gl:delete-renderbuffers (list renderbuffer))
+                   ;; (gl:delete-vertex-arrays vaos)
+                   ;; (gl:delete-framebuffers (list fbo))
+                   ;; (gl:delete-textures textures)
+                   ;; (gl:delete-renderbuffers (list renderbuffer))
                    (format t "done~%")
-                   (sleep 1))))))
+                   (sleep 1)
+		   (break))))))
          (progn
            (format t "done2~%")
 	   (stop-loop)
