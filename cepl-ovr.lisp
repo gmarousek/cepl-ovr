@@ -607,10 +607,13 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
 
                    ;; main loop
 		   (init)
-                   (loop while (glop:dispatch-events (slot-value win 'window)
+		   (setf *running* t)
+                   (loop while (and (glop:dispatch-events (slot-value win 'window)
 						     :blocking nil
 						     :on-foo nil)
-                         when font
+				    *running*
+				    (not (shutting-down-p)))
+                         ;; when font
                          ;; do (update-hud win (hud-text win hmd)
                          ;;                  font)
                          do (continuable (draw-frame hmd :eye-render-desc eye-render-desc
@@ -626,12 +629,11 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                    ;; (gl:delete-framebuffers (list fbo))
                    ;; (gl:delete-textures textures)
                    ;; (gl:delete-renderbuffers (list renderbuffer))
+		   (stop-loop)
                    (format t "done~%")
-                   (sleep 1)
-		   (break))))))
+                   (sleep 1))))))
          (progn
            (format t "done2~%")
-	   (stop-loop)
            (setf *once* nil)
            (format t "done3 ~s~%" *once*)))))
 
