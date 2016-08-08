@@ -616,10 +616,10 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                          ;; when font
                          ;; do (update-hud win (hud-text win hmd)
                          ;;                  font)
-                         do (continuable (draw-frame hmd :eye-render-desc eye-render-desc
-                                            :fbo fbo
-                                            :eye-textures eye-textures
-                                            :win win))
+                         ;; do (continuable (draw-frame hmd :eye-render-desc eye-render-desc
+                         ;;                    :fbo fbo
+                         ;;                    :eye-textures eye-textures
+                         ;;                    :win win))
 			do (continuable (step-demo)))
 			;; (setf *running* t)
 			;; (loop :while (and *running* (not (shutting-down-p))) :do
