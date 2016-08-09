@@ -512,12 +512,12 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                         ;; (fbo (gl:gen-framebuffer))
                         ;; (textures (gl:gen-textures 2))
                         ;; (renderbuffer (gl:gen-renderbuffer))
-			(vaos (list (cepl:make-uninitialized-gpu-array-t)
-				    (cepl:make-uninitialized-gpu-array-t)))
-                        (textures (list (cepl:make-uninitialized-texture)
-					(cepl:make-uninitialized-texture)))
-                        (renderbuffer (cepl:make-uninitialized-buffer-stream))
-			(fbo (cepl:make-uninitialized-fbo))
+			(vaos (list (cepl.types::make-uninitialized-gpu-array-t)
+				    (cepl.types::make-uninitialized-gpu-array-t)))
+                        (textures (list (cepl.types::make-uninitialized-texture)
+					(cepl.types::make-uninitialized-texture)))
+                        (renderbuffer (cepl.types::make-uninitialized-buffer-stream))
+			(fbo (cepl.types::make-uninitialized-fbo))
 			
                         ;; get recommended sizes of eye textures
                         (ls (%ovrhmd::get-fov-texture-size hmd %ovr::+eye-left+
@@ -564,17 +564,17 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
 
 		   ;;TODO [] convert these functions to CEPL
                    ;;(gl:bind-texture :texture-2d (first textures))
-		   (cepl:bind-texture (first textures))
+		   (cepl.textures::bind-texture (first textures)) ;needs initialization
 		   
                    ;;(gl:tex-parameter :texture-2d :texture-wrap-s :repeat)
-		   (setf tex-wrap :repeat (first textures))
+		   (cepl.textures::tex-wrap :repeat (first textures))
 		   
                    ;;(gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
                    ;;(gl:tex-parameter :texture-2d :texture-min-filter :linear)
-		   (setf tex-minify-filter :linear (first textures))
+		   (cepl.textures::tex-minify-filter :linear (first textures))
 		   
                    ;;(gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-		   (setf tex-magnify-filter :linear (first textures))
+		   (cepl.textures::tex-magnify-filter :linear (first textures))
 		   
                    (gl:tex-image-2d :texture-2d 0 :srgb8-alpha8 fbo-w fbo-h
                                     0 :rgba :unsigned-int (cffi:null-pointer))
@@ -591,10 +591,11 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                    (gl:framebuffer-renderbuffer :framebuffer :depth-attachment
                                                 :renderbuffer renderbuffer)
 		   ;;cepl actually has depth attachments! yay.
+		   ;;still no renderbuffer though.
                    (format t "created renderbuffer status = ~s~%"
                            (gl:check-framebuffer-status :framebuffer))
                    (gl:bind-framebuffer :framebuffer 0)
-		   ;;why is this binding 0? above we bound the fbo...
+		   ;;why is this binding 0 as an fbo? maybe default?
 
                    ;; load font texture
                    ;; (gl:bind-texture :texture-2d (second textures))
