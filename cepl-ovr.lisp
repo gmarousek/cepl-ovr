@@ -86,7 +86,7 @@
 	 (e-stream (make-buffer-stream verts)))
     (setf *entities*
 	  (mapcar (lambda (_) (make-entity :pos _ :e-stream e-stream))
-		  (list (v! 0 0 0))))))
+		  (list (v! 0 0 -10))))))
 
 (defun step-demo ()
   ;; (step-host)
@@ -508,10 +508,17 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                                             (glop::win32-window-id win)
                                             (cffi:null-pointer) (cffi:null-pointer))
                  ;; configure FBO for offscreen rendering of the eye views
-                 (let* ((vaos (gl:gen-vertex-arrays 2))
-                        (fbo (gl:gen-framebuffer))
-                        (textures (gl:gen-textures 2))
-                        (renderbuffer (gl:gen-renderbuffer))
+                 (let* (;; (vaos (gl:gen-vertex-arrays 2))
+                        ;; (fbo (gl:gen-framebuffer))
+                        ;; (textures (gl:gen-textures 2))
+                        ;; (renderbuffer (gl:gen-renderbuffer))
+			(vaos (list (cepl:make-uninitialized-gpu-array-t)
+				    (cepl:make-uninitialized-gpu-array-t)))
+                        (textures (list (cepl:make-uninitialized-texture)
+					(cepl:make-uninitialized-texture)))
+                        (renderbuffer (cepl:make-uninitialized-buffer-stream))
+			(fbo (cepl:make-uninitialized-fbo))
+			
                         ;; get recommended sizes of eye textures
                         (ls (%ovrhmd::get-fov-texture-size hmd %ovr::+eye-left+
                                                            ;; use default fov
@@ -546,31 +553,48 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                                   :render-viewport ,v
                                   :texture-size (:w ,fbo-w :h ,fbo-h)
                                   :api :opengl)))
-                        (font (car
-                               (conspack:decode-file
-                                (asdf:system-relative-pathname '3b-ovr
-                                                               "font.met")))))
+                        ;; (font (car
+                        ;;        (conspack:decode-file
+                        ;;         (asdf:system-relative-pathname '3b-ovr
+                        ;;                                        "font.met"))))
+			)
                    ;; configure the fbo/texture
                    (format t "left eye tex size = ~s, right = ~s~% total =~sx~a~%"
                            ls rs fbo-w fbo-h)
-                   ;; (gl:bind-texture :texture-2d (first textures))
-                   ;; (gl:tex-parameter :texture-2d :texture-wrap-s :repeat)
-                   ;; (gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
-                   ;; (gl:tex-parameter :texture-2d :texture-min-filter :linear)
-                   ;; (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-                   ;; (gl:tex-image-2d :texture-2d 0 :srgb8-alpha8 fbo-w fbo-h
-                   ;;                  0 :rgba :unsigned-int (cffi:null-pointer))
-                   ;; (gl:bind-framebuffer :framebuffer fbo)
-                   ;; (gl:framebuffer-texture-2d :framebuffer :color-attachment0
-                   ;;                            :texture-2d (first textures) 0)
-                   ;; (gl:bind-renderbuffer :renderbuffer renderbuffer)
-                   ;; (gl:renderbuffer-storage :renderbuffer :depth-component24
-                   ;;                          fbo-w fbo-h)
-                   ;; (gl:framebuffer-renderbuffer :framebuffer :depth-attachment
-                   ;;                              :renderbuffer renderbuffer)
-                   ;; (format t "created renderbuffer status = ~s~%"
-                   ;;         (gl:check-framebuffer-status :framebuffer))
-                   ;; (gl:bind-framebuffer :framebuffer 0)
+
+		   ;;TODO [] convert these functions to CEPL
+                   ;;(gl:bind-texture :texture-2d (first textures))
+		   (cepl:bind-texture (first textures))
+		   
+                   ;;(gl:tex-parameter :texture-2d :texture-wrap-s :repeat)
+		   (setf tex-wrap :repeat (first textures))
+		   
+                   ;;(gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
+                   ;;(gl:tex-parameter :texture-2d :texture-min-filter :linear)
+		   (setf tex-minify-filter :linear (first textures))
+		   
+                   ;;(gl:tex-parameter :texture-2d :texture-mag-filter :linear)
+		   (setf tex-magnify-filter :linear (first textures))
+		   
+                   (gl:tex-image-2d :texture-2d 0 :srgb8-alpha8 fbo-w fbo-h
+                                    0 :rgba :unsigned-int (cffi:null-pointer))
+		   
+                   (gl:bind-framebuffer :framebuffer fbo)
+		   ;;(cepl::%bind-fbo)?
+                   (gl:framebuffer-texture-2d :framebuffer :color-attachment0
+                                              :texture-2d (first textures) 0)
+                   (gl:bind-renderbuffer :renderbuffer renderbuffer)
+		   ;;cepl doesn't even seem to reference a renderbuffer.
+		   ;;maybe a buffer stream? compare definitions.
+                   (gl:renderbuffer-storage :renderbuffer :depth-component24
+                                            fbo-w fbo-h)
+                   (gl:framebuffer-renderbuffer :framebuffer :depth-attachment
+                                                :renderbuffer renderbuffer)
+		   ;;cepl actually has depth attachments! yay.
+                   (format t "created renderbuffer status = ~s~%"
+                           (gl:check-framebuffer-status :framebuffer))
+                   (gl:bind-framebuffer :framebuffer 0)
+		   ;;why is this binding 0? above we bound the fbo...
 
                    ;; load font texture
                    ;; (gl:bind-texture :texture-2d (second textures))
@@ -608,7 +632,7 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                    ;; main loop
 		   (init)
 		   (setf *running* t)
-                   (loop while (and (glop:dispatch-events (slot-value win 'window)
+                   (loop :while (and (glop:dispatch-events (slot-value win 'window)
 						     :blocking nil
 						     :on-foo nil)
 				    *running*
@@ -620,7 +644,7 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                          ;;                    :fbo fbo
                          ;;                    :eye-textures eye-textures
                          ;;                    :win win))
-			do (continuable (step-demo)))
+			:do (continuable (step-demo)))
 			;; (setf *running* t)
 			;; (loop :while (and *running* (not (shutting-down-p))) :do
 			;;    (continuable (step-demo))))
@@ -630,12 +654,10 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                    ;; (gl:delete-textures textures)
                    ;; (gl:delete-renderbuffers (list renderbuffer))
 		   (stop-loop)
+		   (clear)
+		   (setf *once* nil)
                    (format t "done~%")
-                   (sleep 1))))))
-         (progn
-           (format t "done2~%")
-           (setf *once* nil)
-           (format t "done3 ~s~%" *once*)))))
+                   (sleep 1)))))))))
 
 #++
 (asdf:load-systems '3b-ovr-sample)
