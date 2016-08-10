@@ -508,16 +508,17 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                                             (glop::win32-window-id win)
                                             (cffi:null-pointer) (cffi:null-pointer))
                  ;; configure FBO for offscreen rendering of the eye views
-                 (let* (;; (vaos (gl:gen-vertex-arrays 2))
-                        ;; (fbo (gl:gen-framebuffer))
+                 (let* (;;(vaos (gl:gen-vertex-arrays 2)) ;I think I should be doing this later.
+                        (fbo (make-fbo 0 :d)) ;fbo to render into
                         ;; (textures (gl:gen-textures 2))
-                        ;; (renderbuffer (gl:gen-renderbuffer))
-			(vaos (list (cepl.types::make-uninitialized-gpu-array-t)
-				    (cepl.types::make-uninitialized-gpu-array-t)))
-                        (textures (list (cepl.types::make-uninitialized-texture)
-					(cepl.types::make-uninitialized-texture)))
-                        (renderbuffer (cepl.types::make-uninitialized-buffer-stream))
-			(fbo (cepl.types::make-uninitialized-fbo))
+                        (renderbuffer (gl:gen-renderbuffer)) ;don't know that I need a renderbuffer
+			(textures (list (make-texture nil :dimensions '(2 2) :element-type :uint8)
+					(make-texture nil :dimensions '(2 2) :element-type :uint8)))
+			
+			;; (vaos (list (buffer-stream-vao (make-buffer-stream (make-gpu-array nil :dimensions))
+			;; 	    (cepl.types::make-uninitialized-gpu-array-t)))
+                        ;; (renderbuffer (cepl.types::make-uninitialized-buffer-stream))
+			;; (fbo (cepl.types::make-uninitialized-fbo))
 			
                         ;; get recommended sizes of eye textures
                         (ls (%ovrhmd::get-fov-texture-size hmd %ovr::+eye-left+
@@ -564,17 +565,24 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
 
 		   ;;TODO [] convert these functions to CEPL
                    ;;(gl:bind-texture :texture-2d (first textures))
-		   (cepl.textures::bind-texture (first textures)) ;needs initialization
+		   ;; (cepl.textures::bind-texture (first textures))
+					;needs initialization
+
+		   ;;Scratch everything else.
+		   ;;I think what's being done here is sampling.
+		   ;;If that's true, this will be simple (one to three lines).
+
+		   (sample (first textures)) ;defaults will work, probably
 		   
                    ;;(gl:tex-parameter :texture-2d :texture-wrap-s :repeat)
-		   (cepl.textures::tex-wrap :repeat (first textures))
+		   ;;(gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
+		   ;; (setf (wrap (first textures)) :repeat)
 		   
-                   ;;(gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
                    ;;(gl:tex-parameter :texture-2d :texture-min-filter :linear)
-		   (cepl.textures::tex-minify-filter :linear (first textures))
+		   ;; (setf (minify-filter (first textures)) :linear)
 		   
                    ;;(gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-		   (cepl.textures::tex-magnify-filter :linear (first textures))
+		   ;; (setf (magnify-filter (first textures)) :linear)
 		   
                    (gl:tex-image-2d :texture-2d 0 :srgb8-alpha8 fbo-w fbo-h
                                     0 :rgba :unsigned-int (cffi:null-pointer))
