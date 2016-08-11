@@ -127,8 +127,6 @@
   (when (glop:pressed event)
     (case (glop:keysym event)
       (:escape
-       (cepl::quit)
-       (glop:push-close-event window)
        (cepl.host::shutdown)))))
 
 (defun hud-text (win hmd)
@@ -196,97 +194,6 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                           (c x1 y0 u1 v0)))
                  finally (setf (hud-count win) i))
         (%gl:unmap-buffer :array-buffer)))))
-
-(defun build-world (vao)
-  (let ((vbo (gl:gen-buffer))
-        (color (vector 0 0 0 1))
-        (normal (vector 1 0 0))
-        (buf (make-array '(1024) :element-type 'single-float
-                         :fill-pointer 0 :adjustable t))
-	(shapebuf (make-gpu-array *data* :element-type 'pos-col))
-        (count 0))
-   (labels ((color (r g b &optional (a 1))
-              (setf color (vector r g b a)))
-            (normal (x y z)
-              (setf normal (vector x y z)))
-            (vertex (x y z &optional (w 1))
-              (loop for i in (list x y z) ;;+w
-                    do (vector-push-extend (float i 0.0) buf))
-              (loop for i across color
-                    do (vector-push-extend (float i 0.0) buf))
-              ;; (loop for i across normal
-              ;;       do (vector-push-extend (float i 0.0) buf))
-              (incf count))
-            (cube (x y z r) ;;xyz position, r size(?) 
-              (let* ((x (coerce x 'single-float))
-                     (y (coerce y 'single-float))
-                     (z (coerce z 'single-float))
-                     (r (coerce r 'single-float))
-                     (a (sb-cga:vec (- r) (- r) (- r)))
-                     (b (sb-cga:vec (- r) (+ r) (- r)))
-                     (c (sb-cga:vec (+ r) (+ r) (- r)))
-                     (d (sb-cga:vec (+ r) (- r) (- r)))
-                     (fpi (coerce pi 'single-float)))
-                (loop for m in (list (sb-cga:rotate* 0.0 0.0 0.0)
-                                     (sb-cga:rotate* 0.0 (* fpi 1/2) 0.0)
-                                     (sb-cga:rotate* 0.0 (* fpi 2/2) 0.0)
-                                     (sb-cga:rotate* 0.0 (* fpi 3/2) 0.0)
-                                     (sb-cga:rotate* (* fpi 1/2) 0.0 0.0)
-                                     (sb-cga:rotate* (* fpi 3/2) 0.0 0.0))
-                      do (let ((n (sb-cga:transform-point
-                                   (sb-cga:vec 0.0 0.0 1.0) m)))
-                           (normal (aref n 0) (aref n 1) (aref n 2)))
-                         (flet ((v (v)
-                                  (let ((v (sb-cga:transform-point v m)))
-                                    (vertex (+ x (aref v 0))
-                                            (+ y (aref v 1))
-                                            (+ z (aref v 2))))))
-                           (v a)
-                           (v b)
-                           (v c)
-                           (v a)
-                           (v c)
-                           (v d))))))
-     ;; checkerboard ground
-     (loop for i from -8 below 8
-           do (loop for j from -8 below 8
-                    for p = (oddp (+ i j))
-                    do (if p
-                           (color 0.0 0.9 0.9 1.0)
-                           (color 0.1 0.1 0.1 1.0))
-                       (vertex i -0.66 j)
-                       (vertex (1+ i) -0.66 j)
-                       (vertex (1+ i) -0.66 (1+ j))
-                       (vertex i -0.66 j)
-                       (vertex (1+ i) -0.66 (1+ j))
-                       (vertex i -0.66 (1+ j))))
-     ;; and some random cubes		
-     ;; (let ((*random-state* (make-random-state *random-state*))
-     ;;       (r 20.0))
-     ;;   (flet ((r () (- (random r) (/ r 2))))
-     ;;     (loop for i below 5000
-     ;;           do (color (random 1.0) (+ 0.5 (random 0.5)) (random 1.0) 1.0)
-     ;; 	    (cube (+ 0.0 (r)) (- (r)) (+ 1.5 (r)) (+ 0.05 (random 0.10))))))
-     ;; (let ((stride (* 11 4)))
-     ;;   (gl:bind-buffer :array-buffer vbo)
-     ;;   (%gl:buffer-data :array-buffer (* count stride) (cffi:null-pointer)
-     ;;                    :static-draw)
-     ;;   (gl:bind-vertex-array vao)
-     ;;   (gl:enable-client-state :vertex-array) ;;
-     ;;   (%gl:vertex-pointer 4 :float stride (cffi:null-pointer))
-     ;;   (gl:enable-client-state :normal-array)
-     ;;   (%gl:normal-pointer :float stride (* 8 4))
-     ;;   (gl:enable-client-state :color-array)
-     ;;   (%gl:color-pointer 4 :float stride (* 4 4)))
-     ;; (let ((p (%gl:map-buffer :array-buffer :write-only)))
-     ;;   (unwind-protect
-     ;;        (loop for i below (fill-pointer buf)
-     ;;              do (setf (cffi:mem-aref p :float i)
-     ;;                       (aref buf i)))
-     ;;     (%gl:unmap-buffer :array-buffer)))
-     ;; (gl:bind-vertex-array 0)
-     ;; (gl:delete-buffers (list vbo))
-     count)))
 
 (defparameter *w* nil)
 (defun draw-world (win)
@@ -387,25 +294,6 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                                   (getf size :w)
                                   (getf size :h)))))
              (viewport (getf (elt eye-textures index) :render-viewport)))
-          ;; (gl:enable :scissor-test)
-           ;; configure matrices
-          ;;  (gl:with-pushed-matrix* (:projection)
-      ;;        (gl:load-transpose-matrix projection)
-      ;;        (gl:with-pushed-matrix* (:modelview)
-      ;;          (gl:load-identity)
-      ;;          (gl:mult-transpose-matrix
-      ;;           (kit.math::quat-rotate-matrix
-      ;;            ;; kit.math quaternions are w,x,y,z but libovr quats
-      ;;            ;; are x,y,z,w
-      ;;            (kit.math::quaternion (aref orientation 3)
-      ;;                                  (aref orientation 0)
-      ;;                                  (aref orientation 1)
-      ;;                                  (aref orientation 2) )))
-      ;;          (gl:translate (- (aref position 0))
-      ;;                        (- (aref position 1))
-      ;;                        (- (aref position 2)))
-      ;;          (draw-world win))))
-      ;; (gl:bind-framebuffer :framebuffer 0)
       ;; pass textures to SDK for distortion, display and vsync
       (%ovr::end-frame hmd head-pose eye-textures)))))
 
@@ -460,15 +348,12 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
              (setf y (aref (getf props :window-pos) 1))
              #+linux
              (when (eq (getf props :type) :dk2)
-               ;; sdk is reporting resolution as 1920x1080 when screen is
-               ;; set to 1080x1920 in twinview?
                (format t "overriding resolution from ~sx~s to ~sx~s~%"
                        w h 1920 1080)
                (setf w 1920 h 1080))
              ;; create window
              (format t "opening ~sx~s window at ~s,~s~%" w h x y)
 	     (cepl::init w h "cepl-ovr" t)
-;;*****************************************************************************************************
 	     (let ((win (make-instance '3bovr-test)))
 	       (setf (slot-value win 'window) cepl.glop::*window*
 		     (slot-value win 'hmd) hmd)
@@ -505,17 +390,8 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                                             (glop::win32-window-id win)
                                             (cffi:null-pointer) (cffi:null-pointer))
                  ;; configure FBO for offscreen rendering of the eye views
-                 (let* (;;(vaos (gl:gen-vertex-arrays 2)) ;I think I should be doing this later.
-                        (fbo (make-fbo 0 :d)) ;fbo to render into
-                        ;; (textures (gl:gen-textures 2))
-                        (renderbuffer (gl:gen-renderbuffer)) ;don't know that I need a renderbuffer
-			(texture (make-texture nil :dimensions '(2 2) :element-type :uint8))
-			
-			;; (vaos (list (buffer-stream-vao (make-buffer-stream (make-gpu-array nil :dimensions))
-			;; 	    (cepl.types::make-uninitialized-gpu-array-t)))
-                        ;; (renderbuffer (cepl.types::make-uninitialized-buffer-stream))
-			;; (fbo (cepl.types::make-uninitialized-fbo))
-			
+                 (let* ((texture (make-texture nil :dimensions '(2 2) :element-type :uint8))
+			(fbo (make-fbo (list 0 texture))) ;make an fbo with texture as an attachment			
                         ;; get recommended sizes of eye textures
                         (ls (%ovrhmd::get-fov-texture-size hmd %ovr::+eye-left+
                                                            ;; use default fov
@@ -549,12 +425,7 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
                                 `(:texture ,texture
                                   :render-viewport ,v
                                   :texture-size (:w ,fbo-w :h ,fbo-h)
-                                  :api :opengl)))
-                        ;; (font (car
-                        ;;        (conspack:decode-file
-                        ;;         (asdf:system-relative-pathname '3b-ovr
-                        ;;                                        "font.met"))))
-			)
+                                  :api :opengl))))
                    ;; configure the fbo/texture
                    (format t "left eye tex size = ~s, right = ~s~% total =~sx~a~%"
                            ls rs fbo-w fbo-h)
@@ -572,109 +443,21 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
 		   ;;what I need is a texture for each eye of the Rift, and something to render into
 		   ;;them.
 
-		   
-                   ;;(gl:bind-texture :texture-2d (first textures))
-		   ;; (cepl.textures::bind-texture (first textures))
-					;needs initialization
-
-		   ;;Scratch everything.
-		   ;;I think what's being done here is sampling.
-		   ;;If that's true, this will be simple (one to three lines).
-
 		   ;; (sample texture) ;defaults will work, probably
-		   
-                   ;;(gl:tex-parameter :texture-2d :texture-wrap-s :repeat)
-		   ;;(gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
-		   ;; (setf (wrap (first textures)) :repeat)
-		   
-                   ;;(gl:tex-parameter :texture-2d :texture-min-filter :linear)
-		   ;; (setf (minify-filter (first textures)) :linear)
-		   
-                   ;;(gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-		   ;; (setf (magnify-filter (first textures)) :linear)
-		   
-                   ;; (gl:tex-image-2d :texture-2d 0 :srgb8-alpha8 fbo-w fbo-h
-                   ;;                  0 :rgba :unsigned-int (cffi:null-pointer))
-		   
-                   ;; (gl:bind-framebuffer :framebuffer fbo)
-		   ;;(cepl::%bind-fbo)?
-                   ;; (gl:framebuffer-texture-2d :framebuffer :color-attachment0
-                   ;;                            :texture-2d texture 0)
-                   ;; (gl:bind-renderbuffer :renderbuffer renderbuffer)
-		   ;;cepl doesn't even seem to reference a renderbuffer.
-		   ;;maybe a buffer stream? NO. Renderbuffer is comparable to
-		   ;;a texture, only used when sampling is unnecessary.
-		   ;;so why is it here??
-                   ;; (gl:renderbuffer-storage :renderbuffer :depth-component24
-                   ;;                          fbo-w fbo-h)
-                   ;; (gl:framebuffer-renderbuffer :framebuffer :depth-attachment
-                   ;;                              :renderbuffer renderbuffer)
-		   ;;cepl actually has depth attachments! yay.
-		   ;;still no renderbuffer though.
-                   ;; (format t "created renderbuffer status = ~s~%"
-                   ;;         (gl:check-framebuffer-status :framebuffer))
-                   ;; (gl:bind-framebuffer :framebuffer 0)
-		   ;;why is this binding 0 as an fbo? maybe default?
-
-                   ;; load font texture
-                   ;; (gl:bind-texture :texture-2d (second textures))
-                   ;; (gl:tex-parameter :texture-2d :texture-wrap-s :clamp-to-edge)
-                   ;; (gl:tex-parameter :texture-2d :texture-wrap-t :clamp-to-edge)
-                   ;; (gl:tex-parameter :texture-2d :texture-min-filter :linear-mipmap-linear)
-                   ;; (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-                   ;; (let ((png (png-read:read-png-file
-                   ;;             (asdf:system-relative-pathname '3b-ovr
-                   ;;                                            "font.png"))))
-                   ;;   (gl:tex-image-2d :texture-2d 0 :rgb
-                   ;;                    (png-read:width png) (png-read:height png)
-                   ;;                    0 :rgb :unsigned-byte
-                   ;;                    (make-array (* 3
-                   ;;                                   (png-read:width png)
-                   ;;                                   (png-read:height png))
-                   ;;                                :element-type
-                   ;;                                '(unsigned-byte 8)
-                   ;;                                :displaced-to
-                   ;;                                (png-read:image-data png)))
-                   ;;   (gl:generate-mipmap :texture-2d)
-                   ;;   (gl:bind-texture :texture-2d 0))
-                   ;; (setf (hud-texture win) (second textures))
-
-                   ;; set up a vao containing a simple 'world' geometry,
-                   ;; and hud geometry
-		   
-                   ;; (setf (world-vao win) (first vaos)
-                   ;;       (world-count win) (build-world (first vaos))
-                   ;;       (hud-vao win) (second vaos))
-                   ;; (init-hud win)
 
 		   (glop:set-gl-window (slot-value win 'window))
 
                    ;; main loop
 		   (init)
-		   (setf fbo 
+		   (with-fbo-bound (fbo)
 		   (setf *running* t)
                    (loop :while (and (glop:dispatch-events (slot-value win 'window)
 						     :blocking nil
 						     :on-foo nil)
 				    *running*
 				    (not (shutting-down-p)))
-                         ;; when font
-                         ;; do (update-hud win (hud-text win hmd)
-                         ;;                  font)
-                         ;; do (continuable (draw-frame hmd :eye-render-desc eye-render-desc
-                         ;;                    :fbo fbo
-                         ;;                    :eye-textures eye-textures
-		      ;;                    :win win))
 		      :do (sample texture)
-		      :do (continuable (step-demo)))
-			;; (setf *running* t)
-			;; (loop :while (and *running* (not (shutting-down-p))) :do
-			;;    (continuable (step-demo))))
-                   ;; clean up
-                   ;; (gl:delete-vertex-arrays vaos)
-                   ;; (gl:delete-framebuffers (list fbo))
-                   ;; (gl:delete-textures textures)
-                   ;; (gl:delete-renderbuffers (list renderbuffer))
+		      :do (continuable (step-demo))))
 		   (stop-loop)
 		   (clear)
 		   (setf *once* nil)
