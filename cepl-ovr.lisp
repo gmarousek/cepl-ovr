@@ -442,27 +442,33 @@ latency = ~{m2p:~,3,3f ren:~,3,3f tWrp:~,3,3f~%~
 		   ;;CEPL doesn't seem to reference a renderbuffer object at all. In the end though,
 		   ;;what I need is a texture for each eye of the Rift, and something to render into
 		   ;;them.
+		   ;;A renderbuffer may be synonymous with a buffer-texture in CEPL.
 
 		   ;; (sample texture) ;defaults will work, probably
 
+		   (let ((sample (sample texture)))
+		     (setf (wrap sample) :repeat
+			   (minify-filter sample) :linear
+			   (magnify-filter sample) :linear)
+		   
 		   (glop:set-gl-window (slot-value win 'window))
 
                    ;; main loop
 		   (init)
 		   (with-fbo-bound (fbo)
-		   (setf *running* t)
-                   (loop :while (and (glop:dispatch-events (slot-value win 'window)
-						     :blocking nil
-						     :on-foo nil)
-				    *running*
-				    (not (shutting-down-p)))
-		      :do (sample texture)
-		      :do (continuable (step-demo))))
+		     (setf *running* t)
+		     (loop :while (and (glop:dispatch-events (slot-value win 'window)
+							     :blocking nil
+							     :on-foo nil)
+				       *running*
+				       (not (shutting-down-p)))
+			:do (sample texture)
+			:do (continuable (step-demo))))
 		   (stop-loop)
 		   (clear)
 		   (setf *once* nil)
                    (format t "done~%")
-                   (sleep 1)))))))))
+                   (sleep 1))))))))))
 
 #++
 (asdf:load-systems '3b-ovr-sample)
